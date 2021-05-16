@@ -3,11 +3,20 @@ const path = require('path');
 const express = require('express');
 const bodyParser = require('body-parser');
 const mongoose = require('mongoose');
+const session = require('express-session');
+const MongoDBStore = require('connect-mongodb-session')(session);
 
 const errorController = require('./controllers/error');
 const User = require('./models/user');
 
+const MONGODB_URI =
+'mongodb+srv://rg:0ieSchqScUZj13cP@cluster0.pv9wb.mongodb.net/Ecommerce'
+
 const app = express();
+const store = new MongoDBStore({
+  uri: MONGODB_URI,
+  collection: 'sessions'
+});
 
 app.set('view engine', 'ejs');
 app.set('views', 'views');
@@ -18,9 +27,20 @@ const authRoutes = require('./routes/auth');
 
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(express.static(path.join(__dirname, 'public')));
+app.use(
+  session({
+    secret: 'my secret',
+    resave: false,
+    saveUninitialized: false,
+    store: store
+  })
+);
 
 app.use((req, res, next) => {
-  User.findById('609d13926d859d208c1121d4')
+  if (!req.session.user) {
+    return next();
+  }
+  User.findById(req.session.user._id)
     .then(user => {
       req.user = user;
       next();
@@ -35,9 +55,7 @@ app.use(authRoutes);
 app.use(errorController.get404);
 
 mongoose
-  .connect(
-    'mongodb+srv://rg:0ieSchqScUZj13cP@cluster0.pv9wb.mongodb.net/Ecommerce?retryWrites=true&w=majority'
-  )
+  .connect(MONGODB_URI)
   .then(result => {
     User.findOne().then(user => {
       if (!user) {
@@ -52,7 +70,6 @@ mongoose
       }
     });
     app.listen(3000);
-    console.log("connected")
   })
   .catch(err => {
     console.log(err);
